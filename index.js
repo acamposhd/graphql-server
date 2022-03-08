@@ -1,5 +1,7 @@
-import { gql } from "apollo-server";
-import { ApolloServer } from "apollo-server";
+import { ApolloServer, gql, UserInputError } from "apollo-server";
+import { v1 as uuid } from "uuid";
+import axios from "axios";
+
 const persons = [
   {
     name: "Beto",
@@ -25,6 +27,10 @@ const persons = [
 ];
 
 const typeDefs = gql`
+  enum YesNo {
+    YES
+    NO
+  }
   type Address {
     street: String!
     city: String!
@@ -38,18 +44,60 @@ const typeDefs = gql`
 
   type Query {
     personCount: Int!
-    allPersons: [Person]!
+    allPersons(phone: YesNo): [Person]!
     findPerson(name: String!): Person
+  }
+
+  type Mutation {
+    addPerson(
+      name: String!
+      phone: String
+      street: String!
+      city: String!
+    ): Person
+    editNumber(name: String!, phone: String!): Person
   }
 `;
 
 const resolvers = {
   Query: {
     personCount: () => persons.length,
-    allPersons: () => persons,
+    allPersons: async (root, args) => {
+      const { data: personsFromApi } = await axios.get(
+        "http://localhost:3000/persons"
+      );
+      if (!args.phone) return personsFromApi;
+
+      const byPhone = (person) =>
+        args.phone === "YES" ? person.phone : !person.phone;
+
+      return persons.filter(byPhone);
+    },
     findPerson: (root, args) => {
       const { name } = args;
       return persons.find((person) => person.name === name);
+    },
+  },
+  Mutation: {
+    addPerson: (root, args) => {
+      if (persons.find((person) => person.name === args.name)) {
+        throw new UserInputError("Name must be unique ", {
+          invalidArgs: args.name,
+        });
+      }
+      const person = { ...args, id: uuid() };
+      persons.push(person);
+      return person;
+    },
+    editNumber: (root, args) => {
+      const personIdx = persons.findIndex(
+        (person) => person.name === args.name
+      );
+      const person = persons[personIdx];
+      if (personIdx === -1) return null;
+      const updatedPerson = { ...person, phone: args.phone };
+      persons[personIdx] = updatedPerson;
+      return updatedPerson;
     },
   },
   Person: {

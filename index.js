@@ -2,6 +2,7 @@ import { ApolloServer, gql, UserInputError } from "apollo-server";
 import { v1 as uuid } from "uuid";
 import axios from "axios";
 
+// * TODO: move this to a databse instance
 const persons = [
   {
     name: "Beto",
